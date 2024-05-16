@@ -6,6 +6,8 @@ import (
 	"os"
 	"io"
 	"strings"
+	"bytes"
+	"strconv"
 )
 
 type config struct {
@@ -62,6 +64,9 @@ func Server(conn net.Conn) {
 	if (header[0:3] == "GET") {
 		ParseGetRequest(header, headers, conn)
 	}
+	if (header[0:4] == "POST") {
+		ParsePostRequest(header, headers, conn)
+	}
 }
 
 func ParseGetRequest(header string, headers []string, conn net.Conn) {
@@ -86,6 +91,50 @@ func ParseGetRequest(header string, headers []string, conn net.Conn) {
 	}
 }
 
+func ParsePostRequest(header string, headers []string, conn net.Conn) {
+	parts := strings.Split(header, " ")
+	request := parts[1]
+	
+	var fileContent string =""
+	var buffer bytes.Buffer
+	var length int
+	var err error
+
+	for _, header := range headers {
+		if strings.Contains(header, "Content-Length") {
+			parts = strings.Split(header, ": ")
+			length, err = strconv.Atoi(parts[1])
+			if err != nil {
+				length = 0
+			}
+		}
+	}
+
+	idx := 0
+	fmt.Println("len", len(headers))
+	for i := 0; i < len(headers); i++ {
+		fmt.Println(headers[i])
+		if (headers[i] == "") {
+			idx = i
+		}
+	}
+	for i := idx; i < len(headers); i++ {
+		if (len(headers[i]) == 0) {
+			continue
+		}
+		buffer.WriteString(headers[i][0:length])
+	}
+	fileContent = buffer.String()
+
+	if request[0:1] == "/" && len(request) > 1 {
+		if len(request) >= 7 && request[0:7] == "/files/" {
+			PostFileEndPoint(request[7:], fileContent, conn)
+		} else {
+			conn.Write([]byte("HTTP/1.1 404 Not Found\r\n\r\n"))
+		}
+	}
+}
+
 func UserAgentEndPoint(echo string, headers []string, conn net.Conn) {
 	for _, header := range headers {
 		if strings.Contains(header, "User-Agent") {
@@ -96,6 +145,27 @@ func UserAgentEndPoint(echo string, headers []string, conn net.Conn) {
 			return
 		}
 	}
+}
+
+func PostFileEndPoint(filePath string, fileContent string, conn net.Conn) {
+	fullPath := settings.directory + filePath
+	fmt.Println(fullPath)
+	file, err := os.Create(fullPath)
+	/*err := os.WriteFile(fullPath, []byte(fileContent), 0644)*/
+	if err != nil {
+		os.Exit(-2)
+		//"Erro ao criar arquivo"
+	}
+	defer file.Close()
+	n, err := file.WriteString(fileContent)
+	if err != nil {
+		os.Exit(-2)
+		//"Erro ao escrever arquivo"
+	}
+	fmt.Println("wrote", n, "bytes")
+	//file.Write([]byte(fileContent))
+	conn.Write([]byte("HTTP/1.1 201 Created\r\n\r\n"))
+	//conn.Write([]byte("HTTP/1.1 404 Not Found\r\n\r\n"))
 }
 
 func FileEndPoint(filePath string, conn net.Conn) {
