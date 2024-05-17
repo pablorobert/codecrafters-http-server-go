@@ -85,7 +85,7 @@ func ReadHTTPHeaders(headers []string) {
 
 func breakHeader(header string) {
 	parts := strings.Split(header, ":")
-	key := strings.TrimSpace(parts[0])
+	key := strings.ToLower(strings.TrimSpace(parts[0]))
 	value := strings.TrimSpace(parts[1])
 	httpHeaders[key] = value
 }
@@ -205,10 +205,10 @@ func FileEndPoint(filePath string, conn net.Conn) {
 }
 
 func EchoEndPoint(echo string, conn net.Conn) {
-	encoding := httpHeaders["Accept-Encoding"]
-	fmt.Println(encoding)
+	encoding := httpHeaders["accept-encoding"]
 	var str string
-	if (encoding == "gzip") {
+	if (encoding == "gzip" || strings.Contains(encoding, "gzip")) {
+		encoding = "gzip"
 		str = fmt.Sprintf("HTTP/1.1 200 OK\r\nContent-Encoding: %s\r\nContent-Type: text/plain\r\nContent-Length: %d\r\n\r\n%s",
 			encoding, len(echo),echo)
 	} else {
