@@ -14,6 +14,8 @@ type config struct {
 	directory string
 }
 
+var httpHeaders map[string]string = make(map[string]string)
+
 var settings config
 
 func init() {
@@ -59,14 +61,33 @@ func Server(conn net.Conn) {
 	}
 	str := string(buf)
 	lines := strings.Split(str, "\r\n")
-	header := lines[0]
+	requestHeader := lines[0]
 	headers := lines[1:]
-	if (header[0:3] == "GET") {
-		ParseGetRequest(header, headers, conn)
+	ReadHTTPHeaders(headers)
+	fmt.Println(httpHeaders)
+
+	if (requestHeader[0:3] == "GET") {
+		ParseGetRequest(requestHeader, headers, conn)
 	}
-	if (header[0:4] == "POST") {
-		ParsePostRequest(header, headers, conn)
+	if (requestHeader[0:4] == "POST") {
+		ParsePostRequest(requestHeader, headers, conn)
 	}
+}
+
+func ReadHTTPHeaders(headers []string) {
+	for i := 0; i < len(headers); i++ {
+		if headers[i] == "" {
+			break
+		}
+		breakHeader(headers[i])
+	}
+}
+
+func breakHeader(header string) {
+	parts := strings.Split(header, ":")
+	key := strings.TrimSpace(parts[0])
+	value := strings.TrimSpace(parts[1])
+	httpHeaders[key] = value
 }
 
 func ParseGetRequest(header string, headers []string, conn net.Conn) {
@@ -157,13 +178,11 @@ func PostFileEndPoint(filePath string, fileContent string, conn net.Conn) {
 		//"Erro ao criar arquivo"
 	}
 	defer file.Close()
-	n, err := file.WriteString(fileContent)
+	_, err = file.WriteString(fileContent)
 	if err != nil {
 		os.Exit(-2)
 		//"Erro ao escrever arquivo"
 	}
-	fmt.Println("wrote", n, "bytes")
-	//file.Write([]byte(fileContent))
 	conn.Write([]byte("HTTP/1.1 201 Created\r\n\r\n"))
 	//conn.Write([]byte("HTTP/1.1 404 Not Found\r\n\r\n"))
 }
@@ -186,6 +205,15 @@ func FileEndPoint(filePath string, conn net.Conn) {
 }
 
 func EchoEndPoint(echo string, conn net.Conn) {
-	str := fmt.Sprintf("HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: %d\r\n\r\n%s", len(echo),echo)
+	encoding := httpHeaders["Accept-Encoding"]
+	fmt.Println(encoding)
+	var str string
+	if (encoding == "gzip") {
+		str = fmt.Sprintf("HTTP/1.1 200 OK\r\nContent-Encoding: %s\r\nContent-Type: text/plain\r\nContent-Length: %d\r\n\r\n%s",
+			encoding, len(echo),echo)
+	} else {
+		str = fmt.Sprintf("HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: %d\r\n\r\n%s",
+			len(echo),echo)
+	}
 	conn.Write([]byte(str))
 }
