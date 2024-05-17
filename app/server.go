@@ -2,12 +2,14 @@ package main
 
 import (
 	"fmt"
+	"log"
 	"net"
 	"os"
 	"io"
 	"strings"
 	"bytes"
 	"strconv"
+	"compress/gzip"
 )
 
 type config struct {
@@ -64,7 +66,6 @@ func Server(conn net.Conn) {
 	requestHeader := lines[0]
 	headers := lines[1:]
 	ReadHTTPHeaders(headers)
-	fmt.Println(httpHeaders)
 
 	if (requestHeader[0:3] == "GET") {
 		ParseGetRequest(requestHeader, headers, conn)
@@ -204,13 +205,27 @@ func FileEndPoint(filePath string, conn net.Conn) {
 	conn.Write([]byte("HTTP/1.1 404 Not Found\r\n\r\n"))
 }
 
+func GzipString(str string) string {
+	var b bytes.Buffer
+    gz := gzip.NewWriter(&b)
+    if _, err := gz.Write([]byte(str)); err != nil {
+        log.Fatal(err)
+    }
+    if err := gz.Close(); err != nil {
+        log.Fatal(err)
+    }
+	return b.String()
+}
+
 func EchoEndPoint(echo string, conn net.Conn) {
 	encoding := httpHeaders["accept-encoding"]
 	var str string
 	if (encoding == "gzip" || strings.Contains(encoding, "gzip")) {
 		encoding = "gzip"
+		gzipped := GzipString(echo)
+
 		str = fmt.Sprintf("HTTP/1.1 200 OK\r\nContent-Encoding: %s\r\nContent-Type: text/plain\r\nContent-Length: %d\r\n\r\n%s",
-			encoding, len(echo),echo)
+			encoding, len(gzipped), gzipped)
 	} else {
 		str = fmt.Sprintf("HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: %d\r\n\r\n%s",
 			len(echo),echo)
